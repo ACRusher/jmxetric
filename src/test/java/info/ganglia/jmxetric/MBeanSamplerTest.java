@@ -34,8 +34,7 @@ public class MBeanSamplerTest {
 				throws GangliaException {
 			results.put(attributeName, value);
 		}
-		
-		@Override
+
 		public void publish(String processName, String attributeName,
 				String value, GMetricType type, GMetricSlope slope, int delay,
 				int lifetime, String units) throws GangliaException {

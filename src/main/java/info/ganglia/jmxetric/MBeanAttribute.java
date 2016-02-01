@@ -5,9 +5,12 @@ import info.ganglia.gmetric4j.gmetric.GMetricSlope;
 import info.ganglia.gmetric4j.gmetric.GMetricType;
 
 import java.lang.management.ManagementFactory;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.openmbean.CompositeData;
@@ -61,43 +64,49 @@ class MBeanAttribute {
 
 	public void publish(ObjectName objectName) {
 		try {
-			String value = null;
-			if (mbs == null) {
-				mbs = ManagementFactory.getPlatformMBeanServer();
-			}
-			Object o = mbs.getAttribute(objectName, attributeName);
-			if (o instanceof CompositeData) {
-				CompositeData cd = (CompositeData) o;
-				if (key != null) {
-					Object val = cd.get(key);
-					log.fine("Sampling " + objectName + " attribute "
-							+ canonicalName + ":" + val);
-					value = val.toString();
-				}
-			} else {
-				if (null != o) {
-					value = o.toString();
-					log.fine("Sampling " + objectName + " attribute "
-							+ canonicalName + ":" + o);
-				} else {
-					log.fine("Not sampling " + objectName + " attribute "
-							+ canonicalName + " as value is null");
-				}
-			}
-			if (null != value) {
-				Publisher gm = sampler.getPublisher();
-				// log.finer("Announcing metric " + this.toString() + " value="
-				// + value );
-				gm.publish(process, publishName, value, getType(), getSlope(),
-						sampler.getDelay(), getDMax(), getUnits());
+			String ex = null;
+			if(this.mbs == null) {
+				this.mbs = ManagementFactory.getPlatformMBeanServer();
 			}
 
-		} catch (javax.management.InstanceNotFoundException ex) {
-			log.warning("Exception when getting " + objectName + " "
-					+ canonicalName);
-		} catch (Exception ex) {
-			log.log(Level.WARNING, "Exception when getting " + objectName + " "
-					+ canonicalName, ex);
+			int blockedThreadCount = 0;
+			if(!this.attributeName.equals("BlockedThreadCount")) {
+				Object var9 = this.mbs.getAttribute(objectName, this.attributeName);
+				if(var9 instanceof CompositeData) {
+					CompositeData var11 = (CompositeData)var9;
+					if(this.key != null) {
+						Object var12 = var11.get(this.key);
+						log.fine("Sampling " + objectName + " attribute " + this.canonicalName + ":" + var12);
+						ex = var12.toString();
+					}
+				} else if(var9 != null) {
+					ex = var9.toString();
+					log.fine("Sampling " + objectName + " attribute " + this.canonicalName + ":" + var9);
+				} else {
+					log.fine("Not sampling " + objectName + " attribute " + this.canonicalName + " as value is null");
+				}
+			} else {
+				Map gm = Thread.getAllStackTraces();
+				Iterator val = gm.entrySet().iterator();
+
+				while(val.hasNext()) {
+					Map.Entry cd = (Map.Entry)val.next();
+					if(Thread.State.BLOCKED == ((Thread)cd.getKey()).getState()) {
+						++blockedThreadCount;
+					}
+				}
+
+				ex = String.valueOf(blockedThreadCount);
+			}
+
+			if(ex != null) {
+				Publisher var10 = this.sampler.getPublisher();
+				var10.publish(this.process, this.publishName, ex, this.getType(), this.getSlope(), this.sampler.getDelay(), this.getDMax(), this.getUnits());
+			}
+		} catch (InstanceNotFoundException var7) {
+			log.warning("Exception when getting " + objectName + " " + this.canonicalName);
+		} catch (Exception var8) {
+			log.log(Level.WARNING, "Exception when getting " + objectName + " " + this.canonicalName, var8);
 		}
 	}
 
